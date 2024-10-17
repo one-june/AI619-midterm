@@ -67,8 +67,7 @@ def get_args_parser():
 #%%
 def train(args):
     df = pd.read_csv(args.trainset_csv)
-    df = df.head(50)
-    print(df['nodule'].value_counts())
+    # df = df.head(50)
     df['img_path'] = df['img_path'].apply(lambda x: os.path.join(args.trainset_path, x))
     transforms = T.Compose(
         [

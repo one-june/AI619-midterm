@@ -56,43 +56,42 @@ def get_args_parser():
     parser.add_argument('--testset_path', default='/media/wonjun/HDD2TB/VinDr-CXR-jpgs-resized512/test')
     return parser
 
-parser = get_args_parser()
-args = parser.parse_args("")
+def test(args):
+    backbone = vit_small()
+    dinohead = DINOHead()
+    clshead = CLSHead()
+    model = SimpleWrapper(backbone, dinohead, clshead)
 
-#%%
-backbone = vit_small()
-dinohead = DINOHead()
-clshead = CLSHead()
-model = SimpleWrapper(backbone, dinohead, clshead)
+    state_dict = torch.load(args.checkpoint_path)
 
-# state_dict = torch.load('../outputs/multicxr_pretrain_ddp_nodule/checkpoint.pth')['student']
-# state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
-# state_dict = {k.replace("dino.", ""): v for k, v in state_dict.items()}
-state_dict = torch.load(args.checkpoint_path)
+    msg = model.load_state_dict(state_dict)
+    print(msg)
+    model.eval()
+    model = model.to('cuda')
 
-msg = model.load_state_dict(state_dict)
-print(msg)
-model.eval()
-model = model.to('cuda')
+    testset_path = Path(args.testset_path)
+    testdf = pd.read_csv('test.csv')
 
-testset_path = Path(args.testset_path)
-testdf = pd.read_csv('test.csv')
+    ids = []
+    preds = []
+    for i, row in tqdm(testdf.iterrows(), total=len(testdf)):
+        img_path = testset_path / f"{row['ID']}.jpg"
+        img, _, _ = load_img(img_path)
+        pred = model(img.to('cuda'))[0]
+        pred = torch.sigmoid(pred).detach().cpu().numpy()[0][0]
+        # pred = int(np.round(pred))
+        pred = 1 if pred > 0.8 else 0
+        
+        ids.append(row['ID'])
+        preds.append(pred)
 
-ids = []
-preds = []
-for i, row in tqdm(testdf.iterrows(), total=len(testdf)):
-    img_path = testset_path / f"{row['ID']}.jpg"
-    img, _, _ = load_img(img_path)
-    pred = model(img.to('cuda'))[0]
-    pred = torch.sigmoid(pred).detach().cpu().numpy()[0][0]
-    # pred = int(np.round(pred))
-    pred = 1 if pred > 0.8 else 0
-    
-    ids.append(row['ID'])
-    preds.append(pred)
+    sample_submission = pd.DataFrame({'ID':ids, 'nodule':preds})
+    sample_submission.to_csv('sample_submission.csv', index=False)
 
-sample_submission = pd.DataFrame({'ID':ids, 'nodule':preds})
-sample_submission.to_csv('sample_submission.csv', index=False)
+if __name__=="__main__":
+    parser = get_args_parser()
+    args = parser.parse_args()
+    test(args)
 
 
 # %%
